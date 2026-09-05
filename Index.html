@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LLM Shield — Zero-Knowledge Client-Side PII & Secret Redactor</title>
+  <meta name="description" content="Sanitize sensitive data, API keys, emails, and credentials before pasting into ChatGPT, Claude, or Gemini. 100% client-side, zero network calls.">
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --card-border: #334155;
+      --primary: #38bdf8;
+      --primary-hover: #0284c7;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent-green: #4ade80;
+      --accent-red: #f87171;
+      --code-bg: #090d16;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg); color: var(--text); line-height: 1.5; padding: 24px 16px; min-height: 100vh; }
+    .container { max-width: 1080px; margin: 0 auto; }
+    header { text-align: center; margin-bottom: 32px; }
+    .badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(74, 222, 128, 0.1); color: var(--accent-green); border: 1px solid rgba(74, 222, 128, 0.3); padding: 4px 12px; border-radius: 9999px; font-size: 12px; font-weight: 600; margin-bottom: 12px; }
+    h1 { font-size: 2.25rem; font-weight: 800; letter-spacing: -0.025em; margin-bottom: 8px; }
+    h1 span { color: var(--primary); }
+    .subtitle { color: var(--text-muted); font-size: 1.05rem; max-width: 640px; margin: 0 auto; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+    @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .card-title { font-size: 1rem; font-weight: 700; }
+    textarea { width: 100%; height: 260px; background: var(--code-bg); border: 1px solid var(--card-border); border-radius: 8px; color: var(--text); padding: 14px; font-family: monospace; font-size: 13.5px; line-height: 1.6; resize: vertical; outline: none; }
+    textarea:focus { border-color: var(--primary); }
+    .stats-bar { display: flex; gap: 16px; margin-top: 10px; font-size: 12px; color: var(--text-muted); flex-wrap: wrap; }
+    .stat-count { font-weight: 700; color: var(--primary); }
+    .btn { display: inline-flex; align-items: center; justify-content: center; background: var(--primary); color: #0f172a; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; font-size: 13px; cursor: pointer; transition: 0.15s; }
+    .btn:hover { background: var(--primary-hover); }
+    .btn-secondary { background: #334155; color: var(--text); }
+    .btn-secondary:hover { background: #475569; }
+    .btn-sm { padding: 4px 10px; font-size: 12px; }
+    .replacements-box { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 20px; margin-bottom: 24px; }
+    .table-container { overflow-x: auto; max-height: 200px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 8px 12px; border-bottom: 1px solid var(--card-border); font-family: monospace; }
+    th { color: var(--text-muted); font-size: 11px; text-transform: uppercase; font-family: sans-serif; }
+    .token-tag { background: rgba(56, 189, 248, 0.15); color: var(--primary); padding: 2px 6px; border-radius: 4px; }
+    .restore-section { background: rgba(30, 41, 59, 0.6); border: 1px dashed var(--card-border); border-radius: 12px; padding: 20px; margin-bottom: 24px; }
+    .pro-banner { background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 12px; padding: 24px; text-align: center; }
+    .pro-title { font-size: 1.25rem; font-weight: 700; margin-bottom: 6px; }
+    .pro-desc { color: var(--text-muted); font-size: 14px; max-width: 580px; margin: 0 auto 16px; }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75); display: none; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
+    .modal-overlay.active { display: flex; }
+    .modal { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; max-width: 440px; width: 100%; padding: 24px; }
+    .input-field { width: 100%; background: var(--code-bg); border: 1px solid var(--card-border); border-radius: 6px; padding: 10px; color: var(--text); font-size: 14px; margin-bottom: 12px; outline: none; }
+    footer { text-align: center; margin-top: 40px; font-size: 12px; color: var(--text-muted); }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <div class="badge">🔒 100% Client-Side • Zero Remote Server Calls</div>
+    <h1>LLM <span>Shield</span></h1>
+    <p class="subtitle">Scrub sensitive customer data, API keys, passwords, and PII before pasting into ChatGPT or Claude. Restore original values with one click.</p>
+  </header>
+
+  <div class="grid">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">📝 Raw Prompt / Code</span>
+        <button class="btn btn-secondary btn-sm" onclick="loadSample()">Load Sample</button>
+      </div>
+      <textarea id="rawInput" placeholder="Paste code, logs, or text containing secrets or PII..." oninput="sanitize()"></textarea>
+      <div class="stats-bar">
+        <span>API Keys: <span class="stat-count" id="countKeys">0</span></span>
+        <span>Emails: <span class="stat-count" id="countEmails">0</span></span>
+        <span>Phones: <span class="stat-count" id="countPhones">0</span></span>
+        <span>Cards/SSNs: <span class="stat-count" id="countFin">0</span></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">🛡️ Sanitized Output</span>
+        <button class="btn btn-sm" id="copyBtn" onclick="copySanitized()">Copy Clean Prompt</button>
+      </div>
+      <textarea id="sanitizedOutput" readonly placeholder="Sanitized prompt will appear here..."></textarea>
+      <div class="stats-bar"><span>Ready to paste safely into any AI tool.</span></div>
+    </div>
+  </div>
+
+  <div class="replacements-box" id="legendBox" style="display: none;">
+    <div class="card-header">
+      <span class="card-title">🔑 Redaction Key (Held Locally in Browser Memory)</span>
+      <span class="token-tag" id="tokenCountBadge">0 Active</span>
+    </div>
+    <div class="table-container">
+      <table>
+        <thead><tr><th>Type</th><th>Original Value (Masked)</th><th>Assigned Token</th></tr></thead>
+        <tbody id="replacementsBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="restore-section">
+    <div class="card-header"><span class="card-title">🔄 Restore AI Response</span></div>
+    <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">Paste the output from your AI model to swap placeholders back to real data.</p>
+    <textarea id="aiResponseInput" style="height: 110px;" placeholder="Paste AI response containing tokens like [EMAIL_1] or [API_KEY_1]..."></textarea>
+    <div style="margin-top: 10px; display: flex; justify-content: space-between;">
+      <button class="btn btn-secondary btn-sm" onclick="restoreTokens()">Restore Original Data</button>
+      <button class="btn btn-sm" onclick="copyRestored()">Copy Final Text</button>
+    </div>
+    <textarea id="restoredOutput" style="height: 110px; margin-top: 10px; display: none;" readonly></textarea>
+  </div>
+
+  <div class="pro-banner">
+    <div class="pro-title">Need LLM Shield for CLI & Pre-Commit Pipelines?</div>
+    <p class="pro-desc">Automate PII scrubbing in your terminal ($9/mo Solo, $29/mo Team) before code touches LLMs or repositories.</p>
+    <button class="btn" onclick="openProModal()">Join Pro Waitlist</button>
+  </div>
+
+  <footer>
+    <p>LLM Shield is open source and executes 100% locally in your browser.</p>
+  </footer>
+</div>
+
+<div class="modal-overlay" id="proModal">
+  <div class="modal">
+    <h3 style="margin-bottom: 8px;">LLM Shield Pro / CLI Edition</h3>
+    <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">Automate secret and PII redacting in your terminal, IDE, and team pipelines.</p>
+    <form onsubmit="handleProSubmit(event)">
+      <input type="email" id="proEmail" class="input-field" placeholder="Enter work email..." required>
+      <select id="proRole" class="input-field">
+        <option value="solo">Solo Developer ($9/mo)</option>
+        <option value="team">Team / Startup ($29/mo)</option>
+      </select>
+      <div style="display: flex; gap: 10px; margin-top: 8px;">
+        <button type="submit" class="btn" style="flex: 1;">Join Priority Waitlist</button>
+        <button type="button" class="btn btn-secondary" onclick="closeProModal()">Cancel</button>
+      </div>
+    </form>
+    <div id="proSuccessMsg" style="display: none; margin-top: 12px; padding: 10px; background: rgba(74, 222, 128, 0.15); color: var(--accent-green); border-radius: 6px; font-size: 13px;">
+      ✓ Priority access reserved!
+    </div>
+  </div>
+</div>
+
+<script>
+  let tokenMap = new Map();
+  let reverseMap = new Map();
+  let counts = { keys: 0, emails: 0, phones: 0, fin: 0 };
+
+  const PATTERNS = [
+    { type: 'API_KEY', regex: /(sk-[a-zA-Z0-9]{32,}|ghp_[a-zA-Z0-9]{36}|AKIA[0-9A-Z]{16}|sk_live_[0-9a-zA-Z]{24})/g, category: 'keys' },
+    { type: 'EMAIL', regex: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, category: 'emails' },
+    { type: 'PHONE', regex: /(?:\+?1[-.\s]?)?\(?[2-9]\d{2}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g, category: 'phones' },
+    { type: 'SSN', regex: /\b\d{3}-\d{2}-\d{4}\b/g, category: 'fin' },
+    { type: 'CREDIT_CARD', regex: /\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13})\b/g, category: 'fin' },
+    { type: 'IPV4', regex: /\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b/g, category: 'keys' }
+  ];
+
+  function sanitize() {
+    const raw = document.getElementById('rawInput').value;
+    tokenMap.clear();
+    reverseMap.clear();
+    counts = { keys: 0, emails: 0, phones: 0, fin: 0 };
+    let output = raw;
+    let typeCounters = {};
+
+    PATTERNS.forEach(pat => {
+      output = output.replace(pat.regex, match => {
+        if (!tokenMap.has(match)) {
+          typeCounters[pat.type] = (typeCounters[pat.type] || 0) + 1;
+          const token = `[${pat.type}_${typeCounters[pat.type]}]`;
+          tokenMap.set(match, { token, type: pat.type });
+          reverseMap.set(token, match);
+          counts[pat.category]++;
+        }
+        return tokenMap.get(match).token;
+      });
+    });
+
+    document.getElementById('sanitizedOutput').value = output;
+    document.getElementById('countKeys').innerText = counts.keys;
+    document.getElementById('countEmails').innerText = counts.emails;
+    document.getElementById('countPhones').innerText = counts.phones;
+    document.getElementById('countFin').innerText = counts.fin;
+    renderLegend();
+  }
+
+  function renderLegend() {
+    const box = document.getElementById('legendBox');
+    const tbody = document.getElementById('replacementsBody');
+    tbody.innerHTML = '';
+    if (tokenMap.size === 0) { box.style.display = 'none'; return; }
+    box.style.display = 'block';
+    document.getElementById('tokenCountBadge').innerText = `${tokenMap.size} Active`;
+
+    tokenMap.forEach((meta, original) => {
+      const tr = document.createElement('tr');
+      const mask = original.length > 8 ? original.substring(0, 3) + '••••' + original.substring(original.length - 3) : '••••';
+      tr.innerHTML = `<td>${meta.type}</td><td>${mask}</td><td><span class="token-tag">${meta.token}</span></td>`;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function restoreTokens() {
+    let aiText = document.getElementById('aiResponseInput').value;
+    reverseMap.forEach((original, token) => { aiText = aiText.replaceAll(token, original); });
+    const out = document.getElementById('restoredOutput');
+    out.value = aiText;
+    out.style.display = 'block';
+  }
+
+  function copySanitized() {
+    const val = document.getElementById('sanitizedOutput').value;
+    if (!val) return;
+    navigator.clipboard.writeText(val);
+    const btn = document.getElementById('copyBtn');
+    btn.innerText = 'Copied!';
+    setTimeout(() => btn.innerText = 'Copy Clean Prompt', 2000);
+  }
+
+  function copyRestored() {
+    const val = document.getElementById('restoredOutput').value;
+    if (!val) return;
+    navigator.clipboard.writeText(val);
+  }
+
+  function loadSample() {
+    document.getElementById('rawInput').value = 
+`Debug this Stripe API call and customer notification:
+const stripeSecret = "sk_live_51Msz8ABCD1234567890XYZW";
+const customerEmail = "sarah.connor@cyberdyne.com";
+const customerPhone = "415-555-0199";
+const customerSSN = "123-45-6789";
+const serverIP = "192.168.1.105";`;
+    sanitize();
+  }
+
+  function openProModal() { document.getElementById('proModal').classList.add('active'); }
+  function closeProModal() { document.getElementById('proModal').classList.remove('active'); }
+
+  function handleProSubmit(e) {
+    e.preventDefault();
+    const email = document.getElementById('proEmail').value;
+    const role = document.getElementById('proRole').value;
+    const leads = JSON.parse(localStorage.getItem('llm_shield_leads') || '[]');
+    leads.push({ email, role, timestamp: new Date().toISOString() });
+    localStorage.setItem('llm_shield_leads', JSON.stringify(leads));
+    document.getElementById('proSuccessMsg').style.display = 'block';
+    setTimeout(() => {
+      closeProModal();
+      document.getElementById('proSuccessMsg').style.display = 'none';
+      document.getElementById('proEmail').value = '';
+    }, 2000);
+  }
+</script>
+</body>
+</html>
